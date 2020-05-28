@@ -1,0 +1,1365 @@
+---
+title: "Examen Módulo 3"
+author: "Jorge de Andrés"
+date: "12/3/2020"
+output: 
+  rmdformats::readthedown:
+    toc: 5
+    toc_float: True
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits = 3)
+```
+
+# Examen Módulo 3: Análisis de Datos Multivariantes I
+Año 2020
+
+## Instrucciones
+
+* Deben realizar los ejercicios en RMarkdown, en el que además del código R con todos los procesos que hayan realizado para ejecutar los ejercicios, deben incluir los comentarios y explicaciones del resultado de los mismos, cuestión que como se les ha ido indicando durante todo el trimestre, es lo más importante, que sepan interpretar los resultados.
+
+*	La resolución de sus casos deberán entregarla a través de la aplicación del curso virtual en el enlace del menú izquierdo “TAREAS” (conforme a las instrucciones dadas en el foro). Tengan en cuenta que deben subir a la aplicación el fichero html que generen, NO el fichero de R.
+
+* La fecha máxima de entrega del trabajo es el 22 de marzo. Pueden subirlo antes si lo tienen terminado.
+
+***
+
+## Ejercicio 1
+
+Lea los datos del fichero oecd, el cual tiene los siguientes campos:
+
+* country
+* GDP (PIB)
+* debt.gdp.ratio (Ratio de deuda sobre el PIB)
+* debt (deuda)
+* share.of.debt (porcentaje de deuda sobre el total de la deuda de la OCDE)
+
+Muestre los primeros y los últimos registros y realice un sumario de estadísticas.
+
+Represente gráficamente la relación entre la ratio de deuda sobre el PIB (X) y el porcentaje de deuda sobre el total de la deuda de la OCDE (Y). Ponga título al gráfico y a los ejes X e Y.
+
+### Lectura de datos
+
+```{r 1_read_file_oecd}
+
+oecd <- read.csv('../Data/oecd.txt', sep = ',', header = T)
+str(oecd)
+
+```
+
+### Visualización de datos y estadísticas
+
+```{r 1_summary_dataset}
+
+head(oecd)
+tail(oecd)
+
+summary(oecd)
+
+```
+
+### Obtención de gráficos
+
+```{r 1_show_graph}
+
+# Gráfica con plot
+
+plot(oecd$debt.gdp.ratio, 
+     oecd$share.of.debt, 
+     main='Gráfico Ejercicio 1: Plot', 
+     xlab='Debt GDP Ratio', 
+     ylab='Share of Debt')
+
+```
+
+```{r 1_show_graph_ggplot}
+
+# Gráfica con ggplot2
+
+library(ggplot2)
+
+gg <- ggplot(oecd,
+            aes(x=debt.gdp.ratio, y=share.of.debt)) + 
+            geom_point() + 
+            labs(title="Gráfico Ejercicio 1: ggplot", 
+                 subtitle="Share of Debt Vs Debt GDP Ratio", 
+                 y="Share of Debt", 
+                 x="Debt GDP Ratio", 
+                 caption = "Source: Exam Data (oecd.txt)")
+plot(gg)
+
+```
+
+***
+
+## Ejercicio 2
+
+Realice una regresión lineal simple por Mínimos Cuadrados Ordinarios.
+
+Presente sumario de resultados y estadísticas de los residuos.
+
+Responda: 
+
+* ¿Son significativos los coeficientes?
+* ¿Son normales los residuos?
+* ¿Hay problemas de valores extremos?
+* ¿Hay problemas de heterocedasticidad?
+* ¿La transformación logarítmica de los datos resuelve los problemas que ha encontrado?
+
+
+### Ejecución de modelos y primeras conclusiones
+
+
+```{r 2_execute_lm_mco}
+
+regresion_mco <- lm(share.of.debt ~ debt.gdp.ratio, data = oecd)
+summary(regresion_mco)
+
+```
+
+* Como se puede observar, **el único coeficiente significativo sería "Debt GDP Ratio" si tomamos una significación estándar del 95%**. En cambio, el intercept no es significativo a ningún nivel de confianza.
+* **El R^2 múltiple es de 0,21, lo que indica una correlación muy pobre.** El ajustado, al no tener clases desbalanceadas ni otros fenómenos, resulta también pobre en la misma línea. 
+* El **p-value es 0.004 < 0.05**, lo que nos indica que el modelo es significativo.
+
+De esta manera, parece ser que este modelo es muy malo y que necesita alguna transformación. Probemos con la logarítmica:
+
+```{r 2_execute_lm_mco_log}
+
+regresion_mco_log <- lm( log(share.of.debt) ~ log(debt.gdp.ratio), data = oecd )
+summary(regresion_mco_log)
+
+```
+
+* Como podemos observar en este caso, también cogiendo un **nivel de significación del 95%, los dos (Intercept y log(debt gdp ratio)) son significativos**, de tal manera que las dos variables aportan información al modelo.
+* Como contrapartida, **el R^2 obtenido sigue siendo bastante malo, con 0,478 como valor**, aunque mejora mucho el R^2 obtenido en el modelo anterior. El R^2 ajustado sigue la línea del múltiple, con valor bajo de ajuste para el modelo.
+* Esta mejora viene de la logaritmización de las variables, puesto que los valores extremos que se muestran en la gráfica del ejercicio 1 se "suavizan" con los logaritmos.
+
+
+### Interpretaciones de las gráficas de los modelos
+
+**Modelo Original**
+
+```{r 2_studying_graphs_mco}
+
+plot(regresion_mco)
+
+```
+
+* Para el modelo original (raw data), puede verse en "Residuals Vs Fitted" una cierta **sospecha de heterocedasticidad** que habrá que confirmar posteriormente con un test, ya que parece que los residuos marcados con el 1, 2 y 14 son bastante desviados cuando los fitted values han aumentado.
+* Para el "Q-Q Plot", también surge la **sospecha de que existe una falta de normalidad en los datos**, con un sesgo muy fuerte por la derecha, que también tendremos que confirmar mediante un test.
+* En el "Residuals Vs Leverage", vemos que el valor 2 tiene una distancia de Cook mayor que uno, por lo que, siguiendo la teoría, **el valor 2 tiene influencia como valor atípico**. Vemos también que los valores marcados con 1 y 14 tienen una distancia de Cook de cerca del 0,5, por lo que existe una **alta posibilidad de que sean valores atípicos con influencia en el modelo**.
+
+
+**Modelo con Logaritmos**
+
+```{r 2_studying_graphs_mco_log}
+
+plot(regresion_mco_log)
+
+```
+
+* En este caso, en el "Residuals Vs Fitted" **puede observarse una homocedasticidad probable**, puesto que parece que los residuos, aunque varían un poco, siguen la línea central y no se disparan.
+* Respecto al "Q-Q Plot", vemos como los valores se desvían de la diagonal varias veces pero al final vuelven, lo cual indica un **comportamiento que parece normal pero que tendremos que estudiar sin duda mediante el test de Saphiro.**
+* Si nos fijamos en el "Residuals Vs Leverage", podemos observar como, aunque existen valores con una distancia de Cook más elevada, ninguno llega al 0,5, por lo que es **es muy probable que no afecten estos valores en las estimaciones.**
+
+
+### Estudios de normalidad y heterocedasticidad
+
+#### Estudio de normalidad
+
+Hagamos ahora los estudios de normalidad de ambos modelos:
+
+Como tenemos sólo 36 variables, el estudio de normalidad de los residuos indicado para este caso es el de Shapiro-Wilks. En caso de haber tenido más de 50, hubiéramos usado Lilliefors.
+
+**Modelo original**
+
+```{r 2_studying_normal_mco}
+
+shapiro_mco_original <- shapiro.test(regresion_mco$residuals)
+print(shapiro_mco_original)
+
+```
+
+* Como se puede observar, el resultado del test de Shapiro para el modelo original sin logaritmos es con un p-valor por debajo de 0,05, por lo que se puede afirmar que **no existe normalidad en sus residuos**, tal y como ya sospechábamos en el apartado de las gráficas.
+
+**Modelo con Logaritmos**
+
+```{r 2_studying_logs_mco}
+
+shapiro_mco_logs <- shapiro.test(regresion_mco_log$residuals)
+print(shapiro_mco_logs)
+
+```
+
+* Como se puede observar también aquí, el resultado del test de Shapiro muestra un p-valor superior a 0,05, lo que indica **normalidad en sus residuos**. 
+
+#### Estudio de heterocedasticidad
+
+Para el estudio de heterocedasticidad, usaremos el Test de White, que se recoge en R con la función "bptest", de la librería "lmtest"
+
+**Modelo original**
+
+```{r 2_studying_heterocedasticity_original}
+
+library(lmtest)
+
+bptest(regresion_mco, ~ debt.gdp.ratio, data = oecd)
+
+```
+
+* Como es observable en este test de heterocedasticidad, el p-valor es superior a 0,05, por lo que **nos quedamos con la hipótesis nula de homocedasticidad**. De este modo, rechazamos la alternativa de heterocedasticidad.
+
+**Modelo con Logaritmos**
+
+```{r 2_studying_heterocedasticity_logs}
+
+bptest(regresion_mco_log, ~ debt.gdp.ratio, data = oecd)
+
+```
+
+* En este caso, el resultado vuelve a ser con un p-valor superior a 0,05, por lo que volvemos a **abrazar la hipótesis nula de homocedasticidad**, y rechazamos la hipótesis alternativa de heterocedasticidad.
+
+### Conclusiones finales
+
+Como se puede observar, en este ejercicio se han hecho dos modelos distintos comparando las bonanzas y deficiencias de cada uno.
+
+En el **modelo original** se han obtenido los siguientes valores:
+
+* **R^2**: 0,21
+* **Variables explicativas**: Debt GDP Data
+* **Normalidad de los residuos**: No existe normalidad
+* **Heterocedasticidad de los residuos**: No existe heterocedasticidad
+
+En el **modelo con logaritmos** se han obtenido los siguientes valores:
+
+* **R^2**: 0,47
+* **Variables explicativas**: Debt GDP Data, Intercept
+* **Normalidad de los residuos**: Existe normalidad
+* **Heterocedasticidad de los residuos**: No existe heterocedasticidad
+
+**Habiendo estas conclusiones, sin ninguna duda el modelo con logaritmos resulta superior al modelo original**
+
+***
+
+## Ejercicio 3
+
+* Plantee una regresión lineal múltiple que explique el porcentaje de deuda sobre el total de la deuda de la OCDE y el PIB utilizando una regresión polinómica de orden 2 y 3. 
+* Evalúe los resultados del modelo.
+* Establezca un intervalo de confianza para los coeficientes con α=0.05 y α=0.10. Evalúe los resultados obtenidos en los dos modelos. Intente solucionar los problemas de los valores extremos utilizando variables dummies.
+
+### Ejecución del modelo
+
+```{r 3_poly_creation_2}
+
+model_multiple_2 <- lm(share.of.debt ~ polym(gdp, degree = 2, raw = TRUE) , data = oecd)
+summary(model_multiple_2)
+
+```
+
+* Es observable que **los grados uno y dos, para un 95% de confianza son significativos** (aportan valor a la predicción). El intercept no lo es para el 95%.
+* El **R^2 es de 0,899**, el cual es muy alto y nos indica un buen ajuste.
+* El **p-value es inferior a 0.05**, lo que indica que el modelo es significativo.
+
+```{r 3_poly_creation_3}
+
+model_multiple_3 <- lm(share.of.debt ~ polym(gdp, degree = 3, raw = TRUE) , data = oecd)
+summary(model_multiple_3)
+
+```
+
+* Es observable que **los grados dos y tres, para un 95% de confianza son significativos** (aportan valor a la predicción). El intercept no lo es.
+* El **R^2 es de 0,957**, el cual es muy alto y nos indica un muy buen ajuste.
+* Además, **el error residual estándar es más pequeño en este modelo**, por lo que tenemos un mejor ajuste.
+
+### Obtención e interpretación de gráficas
+
+```{r 3_plot_poly_2}
+
+plot(model_multiple_2)
+
+```
+
+
+```{r 3_cookdistance_poly_2}
+
+plot(cooks.distance(model_multiple_2), 
+     main="Gráfica 1 de Cooks.Distance")
+plot(cooks.distance(model_multiple_2), 
+     ylim=c(0,10),
+     main="Gráfica 2 de Cooks.Distance")
+
+```
+
+* En el "Residuals Vs Leverage", se puede observar como los valores 1 y 2 **tienen influencia en las estimaciones siendo outliers** ya que tienen una distancia de Cook mayor de 1. Existen también valores con una distancia de Cook elevada, como es el 5. 
+* **Atendiendo a la _gráfica 1 de cooks.distance_, vemos que el valor 1 se dispara**. Si hacemos una amplicación (zoom) en la _gráfica 2 de cooks.distance_, vemos como el valor 1 no aparece (se sale del ylim), pero podemos ver que el valor 2 está en 5 aproximadamente, y el valor 5 también destaca respecto al resto.
+* En el "Residuals Vs Fitted", se puede observar como **puede haber una cierta heterocedasticidad que debe de ser analizada mediante un test**.
+* En el Q-Q Plot, **se interpreta que no existe normalidad en la distribución**, pero igualmente será comprobado empíricamente con un test.
+
+```{r 3_plot_poly_3}
+
+plot(model_multiple_3)
+
+```
+
+```{r 3_cookdistance_poly_3}
+
+plot(cooks.distance(model_multiple_3),
+     main="Gráfica 1 de Cooks.Distance")
+plot(cooks.distance(model_multiple_3), 
+     ylim=c(0,30),
+     main="Gráfica 2 de Cooks.Distance")
+
+```
+
+* En el "Residuals Vs Leverage", se puede observar como **existen valores con influencia como outliers**: (1, 2, 5). 
+* Si nos fijamos en la _gráfica 1 de cooks.distance_, vemos como el valor 1 posee 800.000 de valor de cook, lo que indica con toda probabilidad que es un outlier y que influye. Si nos fijamos en la _gráfica 2 de cooks.distance_, podemos ver como el valor 2 también destaca, así como el valor 5.
+* En el "Residuals Vs Fitted", se puede observar como **puede haber una cierta heterocedasticidad que debe de ser analizada mediante un test**. Destaca el valor en fitted = 35, que vuelve no tener residuo.
+* En el Q-Q Plot, **se interpreta que no existe normalidad en la distribución**, pero igualmente será comprobado empíricamente con un test.
+
+
+### Comprobación de normalidad y heterocedasticidad
+
+#### Estudio de normalidad
+
+Como tenemos sólo 36 variables, el estudio de normalidad de los residuos indicado para este caso es el de Shapiro-Wilks. En caso de haber tenido más de 50, hubiéramos usado Lilliefors.
+
+**Modelo Poly Coef. 2**
+
+```{r 3_studying_normal_poly_2}
+
+shapiro_poly_2 <- shapiro.test(model_multiple_2$residuals)
+print(shapiro_poly_2)
+
+```
+
+* Como se puede observar, el resultado del test de Shapiro para el modelo con coeficiente 2 es con un p-valor por debajo de 0,05, por lo que se puede afirmar que **no existe normalidad en sus residuos**, tal y como ya sospechábamos en el apartado de las gráficas.
+
+**Modelo Poly Coef. 3**
+
+```{r 3_studying_normal_poly_3}
+
+shapiro_poly_3 <- shapiro.test(model_multiple_3$residuals)
+print(shapiro_poly_3)
+
+```
+
+* Como se puede observar también aquí, el resultado del test de Shapiro muestra un p-valor también inferior a 0,05, lo que vuelve a indicar que  **no existe normalidad en sus residuos**, como se sospechaba.
+
+#### Estudio de heterocedasticidad
+
+Para el estudio de heterocedasticidad, usaremos el Test de White, que se recoge en R con la función "bptest", de la librería "lmtest"
+
+**Modelo Poly Coef. 2**
+
+```{r 3_studying_heterocedasticity_poly_2}
+
+library(lmtest)
+
+bptest(model_multiple_2, ~ I(polym(gdp, degree=2, raw=TRUE)), data = oecd)
+
+```
+
+* El valor es inferior a 0,05, por lo que **acogemos la hipótesis alternativa de heterocedasticidad**.
+
+**Modelo Poly Coef. 3**
+
+```{r 3_studying_heterocedasticity_poly_3}
+
+library(lmtest)
+
+bptest(model_multiple_3, ~ I(polym(gdp, degree=3, raw=TRUE)), data = oecd)
+
+```
+
+* El p-valor obtenido es inferior a 0,05, por lo que también en este polinomio **acogemos la hipótesis alternativa de heterocedasticidad**.
+
+### Obtención de intervalos de confianza y comparación
+
+#### Intervalos de confianza α=0.05
+
+**Coeficiente 2**
+
+```{r 3_confidence_interval_poly2}
+
+confint(model_multiple_2)
+
+```
+
+**Coeficiente 3**
+
+```{r 3_confidence_interval_poly3}
+
+confint(model_multiple_3)
+
+```
+
+```{r 3_confidence_interval_comparison_0.95}
+#Diferencia coef 3
+dif_coef3_int_95 <- confint(model_multiple_3, level=0.95)[1, 2] - confint(model_multiple_3, level=0.95)[1, 1]
+#Diferencia coef 2
+dif_coef2_int_95 <- confint(model_multiple_2, level=0.95)[1, 2] - confint(model_multiple_2, level=0.95)[1, 1]
+
+print(paste0('Por ejemplo, si analizamos los intervalos de confianza para el intercept, obtenemos que la diferencia entre el 2.5% y el 97.5% para el modelo de coeficiente 3 es de ', dif_coef3_int_95, ', mientras que para el de coeficiente 2 es de ', dif_coef2_int_95))
+```
+
+
+#### Intervalos de confianza α=0.10
+
+**Coeficiente 2**
+
+```{r 3_confidence_interval_poly2_2}
+
+confint(model_multiple_2, level=0.90)
+
+```
+
+**Coeficiente 3**
+
+```{r 3_confidence_interval_poly3_2}
+
+confint(model_multiple_3, level=0.90)
+
+```
+
+```{r 3_confidence_interval_comparison_0.90}
+#Diferencia coef 3
+dif_coef3_int_90 <- confint(model_multiple_3, level=0.90)[1, 2] - confint(model_multiple_3, level=0.90)[1, 1]
+#Diferencia coef 2
+dif_coef2_int_90 <- confint(model_multiple_2, level=0.90)[1, 2] - confint(model_multiple_2, level=0.90)[1, 1]
+
+print(paste0('Por ejemplo, si analizamos los intervalos de confianza para el intercept, obtenemos que la diferencia entre el 5% y el 95% para el modelo de coeficiente 3 es de ', dif_coef3_int_90, ', mientras que para el de coeficiente 2 es de ', dif_coef2_int_90))
+```
+
+#### Evaluación de los intervalos de confianza
+
+Como se puede observar, **los intervalos de confianza de las variables del modelo con polinomio 3 son más pequeños en igualdad de condiciones (con el mismo lambda)**, por ende, el modelo es más fiable y más preciso.
+
+### Solución de valores extremos mediante Dummies
+
+#### Dummyficación y lanzamiento de modelos
+
+La solución a este ejercicio la planteo dummificando los países outliers como sí, y los normales como no. En este momento, añado dicha variable al modelo para que "pueda aprender" sobre los outliers y probablemente mejore el modelo con esta solución.
+
+```{r 3_dummyficacion_models}
+
+oecd['outlier_poly_2'] <- ifelse(cooks.distance(model_multiple_2) > 1, "Sí", "No")
+oecd['outlier_poly_3'] <- ifelse(cooks.distance(model_multiple_3) > 1, "Sí", "No")
+
+```
+
+Ahora creo un modelo incluyendo esta variable:
+
+```{r 3_models_with_outliers_col_poly2}
+
+model_multiple_2_outs <- lm(share.of.debt ~ polym(gdp, degree=2, raw=TRUE) + outlier_poly_2, data = oecd)
+summary(model_multiple_2_outs)
+
+```
+
+```{r 3_models_with_outliers_col_poly3}
+
+model_multiple_3_outs <- lm(share.of.debt ~ polym(gdp, degree=3, raw=TRUE) + outlier_poly_3, data = oecd)
+summary(model_multiple_3_outs)
+
+```
+
+#### Interpretación de gráficas
+
+```{r 3_showing_graphs_outs_poly_2}
+
+plot(model_multiple_2_outs)
+plot(cooks.distance(model_multiple_2_outs), main="Cooks Distance 1")
+
+```
+
+* En el "Residuals Vs Fitted", podemos comprobar como **no parece haber heterocedasticidad en los residuos**.
+* En el "Q-Q Plot", podemos observar **una falta de normalidad en los residuos**.
+* En el "Residuals Vs Leverage", podemos ver como **sigue habiendo valores outliers**, lo cual tiene sentido ya que no los hemos eliminado.
+
+
+```{r 3_showing_graphs_outs_poly_3}
+
+plot(model_multiple_3_outs)
+plot(cooks.distance(model_multiple_3_outs), main="Cooks Distance 1")
+
+```
+
+* En el "Residuals Vs Fitted", podemos comprobar como **podría haber heterocedasticidad en los residuos**, pero como existe cierta variación en los residuos es algo que debe de demostrarse mediante un test.
+* En el "Q-Q Plot", podemos observar **una falta de normalidad en los residuos**.
+* En el "Residuals Vs Leverage", podemos ver como **sigue habiendo valores outliers**, lo cual, al igual que en el apartado anterior, tiene sentido ya que no los hemos eliminado.
+
+
+#### Test de Normalidad y Heterocedasticidad
+
+##### Test de Normalidad
+
+**Poly 2**
+
+```{r 3_studying_normal_poly_2_outs}
+
+shapiro_poly_2_outliers <- shapiro.test(model_multiple_2_outs$residuals)
+print(shapiro_poly_2_outliers)
+
+```
+
+* Como se obtiene un p-valor inferior a 0,05, **se abraza la hipótesis nula de normalidad**, ya que no puede ser rechazada.
+
+**Poly 3**
+
+```{r 3_studying_normal_poly_3_outs}
+
+shapiro_poly_3_outliers <- shapiro.test(model_multiple_3_outs$residuals)
+print(shapiro_poly_3_outliers)
+
+```
+
+* Como se obtiene un p-valor superior a 0,05, **se abraza la hipótesis alternativa de no normalidad**, ya que no puede ser rechazada.
+
+
+##### Test de heterocedasticidad
+
+Para el estudio de heterocedasticidad, usaremos el Test de White
+
+**Modelo Poly Coef. 2**
+
+```{r 3_studying_heterocedasticity_poly_2_outs}
+
+library(lmtest)
+
+bptest(model_multiple_2_outs, ~ I(polym(gdp, degree=2, raw=TRUE)) + I(outlier_poly_2), data = oecd)
+
+```
+
+* El valor es inferior a 0,05, por lo que **acogemos la hipótesis alternativa de heterocedasticidad**.
+
+**Modelo Poly Coef. 3**
+
+```{r 3_studying_heterocedasticity_poly_3_outs}
+
+library(lmtest)
+
+bptest(model_multiple_3_outs, ~ I(polym(gdp, degree=3, raw=TRUE)) + I(outlier_poly_3), data = oecd)
+
+```
+
+* El valor es inferior a 0,05, por lo que **acogemos la hipótesis alternativa de heterocedasticidad**.
+
+
+### Conclusiones finales
+
+Tras la realización de este ejercicio tenemos 4 modelos:
+
+
+**Modelo de coeficiente 2**
+
+Para este modelo, tenemos los siguientes resultados:
+
+* **R^2**: 0.899
+* **Variables significativas para 95% confianza**: Polym(gdp, 1), Polym(gdp, 2)
+* **Test de normalidad de residuos**: No existe normalidad en sus residuos
+* **Test de heterocedasticidad**: Abrazamos la hipótesis alternativa de heterocedasticidad
+
+
+**Modelo de coeficiente 3**
+
+Para este modelo, tenemos los siguientes resultados:
+
+* **R^2**: 0.957
+* **Variables significativas para 95% confianza**: Polym(gdp, 2), Polym(gdp, 3)
+* **Test de normalidad de residuos**: No existe normalidad en sus residuos
+* **Test de heterocedasticidad**: Abrazamos la hipótesis alternativa de heterocedasticidad
+
+
+**Modelo de coeficiente 2 con detección de outliers**
+
+Para este modelo, tenemos los siguientes resultados:
+
+* **R^2**: 0.992
+* **Variables significativas para 95% confianza**: Polym(gdp, 1), Polym(gdp, 2), outlier_sí
+* **Test de normalidad de residuos**: Se abraza la normalidad
+* **Test de heterocedasticidad**: Se abraza la heterocedasticidad
+
+**Modelo de coeficiente 3 con detección de outliers**
+
+Para este modelo, tenemos los siguientes resultados:
+
+* **R^2**: 0.975
+* **Variables significativas para 95% confianza**: Polym(gdp, 1), Polym(gdp, 2), Polym(gdp, 3), outlier_sí, Intercept
+* **Test de normalidad de residuos**: Se abraza la no normalidad
+* **Test de heterocedasticidad**: Se abraza la heterocedasticidad
+
+***
+
+## Ejercicio 4
+
+* Entre los modelos analizados en el curso, ¿cuál cree que es el más adecuado para resolver los problemas que ha encontrado en la mejor relación lineal entre el porcentaje de deuda sobre el total de la deuda de la OCDE y la tasa de deuda sobre el PIB?.
+Realice el ejercicio con el modelo que considere el más idóneo.
+* Evalúe la normalidad de los residuos.
+* Presente un gráfico con los porcentajes de deuda observados, los porcentajes estimados, y las bandas de confianza para los valores estimados con una α=0.05 y realice la predicción que daría el modelo para un país que lograra una tasa de deuda sobre el PIB del 25%.
+
+
+### Planteamiento del modelo
+
+El ejercicio nos está pidiendo primero la identificación del mejor R^2 de los modelos del ejercicio 2 (porcentaje de deuda sobre el total de la deuda de la OCDE y la tasa de deuda sobre el PIB). De esta manera, y volviendo al apartado de conclusiones de ese ejercicio, podemos observar que el modelo con mejor R^2 es el modelo en el que los datos están logaritmizados, porque se obtiene un R^2 de 0.47 respecto al de 0,21 con los datos sin logaritmizar.
+
+Este modelo es muy robusto. A continuación, vuelvo a visualizar sus conclusiones:
+
+* **R^2**: 0,47
+* **Variables explicativas**: Debt GDP Data, Intercept
+* **Normalidad de los residuos**: Existe normalidad
+* **Heterocedasticidad de los residuos**: No existe heterocedasticidad
+
+De esta manera, el único problema que tiene este modelo es que es demasiado simple, y no es capaz de explicar bien la variable dependiente, ya que todas sus variables son explicativas y con ello no es suficiente.
+
+Así, el uso de otros modelos más complejos puede mejorar este R^2.
+
+### Regresión Robusta
+
+Aunque el modelo del ejercicio 3 no tiene valores outliers según la distancia de Cook, **seguramente no suponga una gran diferencia**, pero veamos a ver si mejora en algo:
+
+```{r 4_robust_reg_huber}
+
+library(MASS)
+
+robust_huber_4 <- rlm( log(share.of.debt) ~ log(debt.gdp.ratio), oecd )
+robust_huber_4
+summary(robust_huber_4)
+
+```
+
+```{r 4_robust_reg_bisquare}
+
+robust_bisquare_4 <- rlm( log(share.of.debt) ~ log(debt.gdp.ratio), oecd, psi = psi.bisquare )
+robust_bisquare_4
+summary(robust_bisquare_4)
+
+```
+
+#### Estudio de normalidad
+
+```{r 4_normal_robust_huber}
+
+shapiro_huber <- shapiro.test(robust_huber_4$residuals)
+print(shapiro_huber)
+
+```
+
+```{r 4_normal_robust_bisquare}
+
+shapiro_bisquare <- shapiro.test(robust_bisquare_4$residuals)
+print(shapiro_bisquare)
+
+```
+
+* Como es lógico, ante modelos tan similares, **sigue existiendo normalidad en sus residuos**
+
+#### Estudio de la heterocedasticidad
+
+```{r 4_het_robust_huber}
+
+bptest(robust_huber_4, ~ debt.gdp.ratio, data = oecd)
+
+```
+
+```{r 4_het_robust_bisquare}
+
+bptest(robust_bisquare_4, ~ debt.gdp.ratio, data = oecd)
+
+```
+
+* También, como es lógico, el estudio de la heterocedasticidad es el mismo, por lo que **sigue existiendo homocedasticidad**
+
+#### Estudio del AIC
+
+```{r 4_AIC_robust_huber}
+
+AIC(robust_huber_4)
+
+```
+
+```{r 4_AIC_robust_bisquare}
+
+AIC(robust_bisquare_4)
+
+```
+
+Comparando los modelos, se ve que son iguales. **No tendríamos capacidad de decidirnos por uno siguiendo el AIC.**
+
+#### Conclusiones
+
+La regresión robusta, como se preveía, no mejora significativamente los resultados obtenidos con la regresión lineal en la que se aplicaron logaritmos. Esto tiene sentido ya que, al tomar logaritmos en su momento, suavizamos los outliers quedándonos sin ellos, por lo que **la regresión robusta**, aunque el intento siempre es interesante, **no aporta en este modelo**.
+
+
+### Regresión Lineal Múltiple
+
+Como el nuestro problema la regresión lineal simple es simple en sí, el uso de una regresión lineal múltiple puede ser una buena opción para complicar el modelo y poder obtener mejores resultados.
+
+```{r 4_regresion_mult}
+
+reg_mult <- lm(log(share.of.debt) ~ log(debt.gdp.ratio) + log(gdp), data = oecd)
+reg_mult
+summary(reg_mult)
+
+```
+
+Como se puede observar, este modelo a priori es muy bueno, con un 99.8 de R^2 y con todas las variables siendo significativas. Además, su p-value es muy cercano a 0.
+
+Vamos a ver sus gráficas...
+
+#### Gráficas del modelo
+
+```{r 4_regresion_mult_graph}
+
+plot(reg_mult)
+
+```
+
+* En "Residuals Vs Fitted", podemos observer que **existe un valor probablemente outlier (36), y luego cierto sesgo en los extremos** de los fitted values.
+* En "Q-Q Plot", podemos observar como la distribución parece normal hasta que tiene un **sesgo muy fuerte por la derecha**.
+* En "Residuals Vs Leverage", podemos observar como **la observación 36 supera el 1 en la distancia de Cook** y por lo tanto se considera outlier. Además, hay varios valores que se acercan, como el 1 y el 2
+
+#### Estudio de normalidad
+
+```{r 4_multiple_normal_test}
+
+shapiro_reg_mult <- shapiro.test(reg_mult$residuals)
+print(shapiro_reg_mult)
+
+```
+
+Como vimos anteriormente, este modelo no es normal, ya que acogemos la **hipótesis alternativa de no normalidad**.
+
+#### Estudio de heterocedasticidad
+
+```{r 4_het_multiple_test}
+
+bptest(reg_mult, ~ log(debt.gdp.ratio) + log(gdp), data = oecd)
+
+```
+
+Se puede observar como **es heterocedástico**.
+
+#### Estudio de autocorrelación
+
+Miremos la autocorrelación de los residuos:
+
+```{r 4_auto_multiple_test}
+
+bgtest(reg_mult, order = 1)
+
+```
+
+**No existe autocorrelación entre los residuos en el tiempo, para un orden hasta 1**. Para órdenes mayores [2-11] sí que existe autocorrelación.
+
+#### Estudio de correlación de las variables
+
+Hay sospechas de que las variables están correlacionadas debido al alto R^2 que se obtiene:
+
+```{r 4_corr_multiple_test}
+
+cbinded4 <- cbind (log(oecd$share.of.debt), log(oecd$debt.gdp.ratio), log(oecd$gdp))
+cor(cbinded4)
+
+```
+
+Como se puede observar:
+
+* Hay una **fuerte correlación** entre la variable 1: log(share.of.debt) y la variable 3: log(gdp). 
+* También hay una **correlación algo fuerte** entre log(share.of.debt) y log(oecd$debt.gdp.ratio).
+* Hay una **correlación media** entre log(debt.gdp.ratio) y log(gdp)
+
+```{r 4_vif_corr_multiple}
+
+car::vif(reg_mult)
+
+```
+
+Medidas las correlaciones con el Vif, obtenemos que **la correlación no es muy alta en las explicativas** (Vif en 1 = Correlación baja)
+
+#### Estudio del AIC de este modelo
+
+```{r 4_AIC_multiple}
+
+AIC(reg_mult)
+
+```
+
+Se ve que es mucho mejor que en las regresiones robustas.
+
+
+#### Conclusiones
+
+* Las **dos variables predictoras no están muy correlacionadas entre sí**, por lo que no parecen ser combinación lineal. Además, en el modelo aparecen las dos como altamente significativas.
+* La variable log(gdp) tiene una fuerte correlación con el share of debt, lo que lo convierte en una buena variable predictora.
+* **No es un modelo demasiado robusto**. Tiene como pegas una autocorrelación limítrofe y una falta de normalidad en sus residuos.
+* El **AIC obtenido** dice que este modelo mejora a las regresiones robustas.
+* Este modelo cae **en un fuerte overfitting, de tal manera que es un modelo desechable para futuras predicciones**.
+
+Sus resultados son:
+
+* **R^2**: 0,998
+* **AIC**: -62.6
+* **Variables explicativas**: log(debt.gdp.ratio), Intercept, log(gdp).
+* **Normalidad de los residuos**: No existe normalidad.
+* **Heterocedasticidad de los residuos**: No existe homocedasticidad.
+* **Autocorrelación de los residuos**: Limítrofe, no existe para orden = 1, pero para órdenes superiores hasta 11 sí.
+
+### Visualización de todos los modelos
+
+```{r 4_plot_robusts}
+
+plot(log(oecd$share.of.debt), type="p")
+lines(lm(log(share.of.debt) ~ log(debt.gdp.ratio), oecd)$fitted.values, col= "red")
+lines(rlm(log(share.of.debt) ~ log(debt.gdp.ratio), oecd)$fitted.values, col= "green")
+lines(rlm(log(share.of.debt) ~ log(debt.gdp.ratio), oecd, psi = psi.bisquare)$fitted.values, col="blue")
+lines(lm(log(share.of.debt) ~ log(debt.gdp.ratio) + log(gdp), data = oecd)$fitted.values, col="black")
+
+```
+
+Como se puede ver, apenas hay mejora con las regresiones robustas debido a la ausencia de valores outliers. Si comparamos los "Residual Standard Errors":
+
+* **lm**: 1.38
+* **rlm (Huber)**: 1.31
+* **rlm (Bisquare)**: 1.29
+* **lm (Multiple)**: 0.09 -> Gran overfitting
+
+### Gráficos solicitados
+
+```{r 4_predictions_lmlog}
+
+predicciones_interval_lm <- exp(predict(regresion_mco_log, newdata = oecd, interval = 'confidence'))
+predicciones_interval_lm
+
+```
+
+```{r 4_graph_lm}
+
+library(gplots)
+
+upr_2 <- predicciones_interval_lm[, 3]
+lwr_2 <- predicciones_interval_lm[, 2]
+pred_2 <- predicciones_interval_lm[, 1]
+
+# Por país
+
+barplot2(pred_2, 
+         plot.ci=TRUE, 
+         ci.l=lwr_2, 
+         ci.u=upr_2,
+         main = "Predictions with intervals")
+
+# Gráfica ejercicio sin logaritmos
+
+plot(x = oecd$share.of.debt, 
+     y = pred_2, 
+     pch = 20, 
+     col = "black",
+     main = "Share of Debt: Predictions & Intervals",
+     xlab = "share of debt",
+     ylab = "prediction",
+     ylim = c(0, 30))
+lines(x = oecd$share.of.debt, 
+      lwr_2, 
+      col = "red", 
+      lwd = 1)
+lines(x = oecd$share.of.debt, 
+      upr_2, 
+      col = "red", 
+      lwd = 1)
+
+# Gráfica ejercicio logaritmizada
+
+plot(x = log(oecd$share.of.debt), 
+     y = log(pred_2), 
+     pch = 20, 
+     col = "black",
+     main = "Share of Debt: Predictions & Intervals (Logs)",
+     xlab = "Log of share of debt",
+     ylab = "Log of prediction",
+     ylim = c(-10, 10))
+lines(x = log(oecd$share.of.debt), 
+      log(lwr_2), 
+      col = "red", 
+      lwd = 1)
+lines(x = log(oecd$share.of.debt), 
+      log(upr_2), 
+      col = "red", 
+      lwd = 1)
+
+```
+
+Como se puede observar, las predicciones son de una calidad bastante pobre. Para share of debts pequeños predice medianamente bien, pero para share of debts grandes tiene problemas.
+
+### Predicción
+
+```{r 4_prediction_25%}
+
+new.data <- data.frame(
+  debt.gdp.ratio = 25
+)
+
+predicciones_interval_lm_2 <- exp(predict(regresion_mco_log, 
+                                          newdata = new.data, 
+                                          interval = 'prediction', 
+                                          level = 0.95))
+predicciones_interval_lm_2
+
+```
+
+
+### Conclusiones Finales
+
+* Como hemos visto en este ejercicio, **ningún modelo es más robusto (respecto a normalidad, homocedasticidad...) que el lineal simple con logaritmos** hecho en el ejercicio 2.
+* Además, **las regresiones robustas**, sobre el modelo con logaritmos, no aportan prácticamente nada porque este modelo no tiene outliers.
+* Junto con esto, la **regresión robusta sin logaritmos** (no se muestra por no alargar demasiado el ejercicio), obtiene un AIC mayor que el de el modelo lineal simple, por lo que se debe desechar al ser peor modelo.
+* **El modelo lineal múltiple posee un overfitting demasiado grande** para ser considerado bueno. Esto se ve perfectamente en el apartado de "Visualización de todos los modelos".
+* **No se usa un modelo Probit, Logit...** porque no procede en esta casuística.
+
+***
+
+## Ejercicio 5
+
+* Estime un modelo no lineal para los porcentajes de deuda y la tasa de deuda sobre el PIB. Utilice para ello, las técnicas de regresión splines y smoothing splines. 
+* Indique los grados de libertad que ha utilizado en cada técnica y justifique la selección de los tramos y del parámetro de suavizado. Presente los resultados en un gráfico. Compruebe si mejoran los resultados utilizando variables dummies auxiliares.
+* Estime un modelo de regresión Modelo Aditivo Generalizado y discuta sobre cuál de todos los métodos que ha realizado en la práctica utilizaría para estimar la relación entre el porcentaje de deuda en los países de la OCDE y la tasa de deuda sobre el PIB.
+
+### Creación del modelo Splines: Bs y Ns
+
+Visualizamos la variable X:
+
+```{r 5_visualization_x}
+
+boxplot(oecd$debt.gdp.ratio,
+        main = "Debt GDP Ratio: Boxplot")
+
+plot(oecd$debt.gdp.ratio, 
+     oecd$share.of.debt,
+     main = "Model Vars")
+
+```
+
+Creamos los modelos:
+
+```{r 5_model_creation}
+
+library(splines)
+
+# B-Spline
+
+model_splines_5 <- lm( share.of.debt ~ bs( debt.gdp.ratio, knots = seq(40, 140, by = 30), degree = 3 ), data = oecd)
+model_splines_5
+summary(model_splines_5)
+AIC(model_splines_5)
+BIC(model_splines_5)
+
+# Natural Splines
+
+model_splines_5_ns <- lm(log(share.of.debt) ~ ns( log(debt.gdp.ratio), knots = seq(40, 140, by = 30), intercept = F), data = oecd)
+model_splines_5_ns
+summary(model_splines_5_ns)
+AIC(model_splines_5_ns)
+BIC(model_splines_5_ns)
+
+```
+
+
+Se escoge una secuencia entre 40 y 140 de 30 en 30 porque en el eje x, como se puede ver en la visualización del plot vemos que los cambios de tendencia se pueden explicar aproximadamente en los puntos 40, 70, 100 y así sucesivamente, por lo que es un buen punto de partida. Otra aproximación que se suele usar mucho suele ser el poner los nodos en los percentiles 25, 50 y 75.
+
+Como se puede observar, en el B-Spline:
+
+* Se obtiene un **R^2 de 0.385**, lo que empeora el modelo lineal simple.
+* Se obtiene un **AIC de 241, y un BIC de 255**.
+* Se obtiene que **casi todas las variables no tienen significación**.
+* Su p-value es de 0.039, un valor muy cercano a 0.05, pero aun así **es significativo**.
+* Por ende, este modelo de B-Spline **no es una buena alternativa**.
+
+En cambio, en el Natural Spline:
+
+* Se obtiene un **R^2 de 0.503**, que también mejora el modelo lineal simple.
+* Se obtiene un **AIC de 131, y un BIC de 139**, lo que mejora al B-Spline por mucho.
+* Se obtiene que **todas las variables que no tienen NA's tienen significación**
+* Su p-value es es de 4.68x10^-5, por lo que **es un modelo significativo**.
+* **Es mejor alternativa que el modelo anterior**, pero hay que tener en cuenta de que los splines buscan las curvas sobre los datos, y al logaritmizar estamos "suavizando" dichos datos.
+
+
+Otra forma de hacerlo es con grados de libertad, donde el algoritmo automáticamente pone los nodos en cuantiles uniformes de los datos.
+
+Así, hagamos unas pruebas con grados de libertad:
+
+```{r r 5_model_creation_with_df}
+
+# B-Spline con 10 grados de libertad
+
+model_splines_5_df <- lm( share.of.debt ~ bs( debt.gdp.ratio, df = 10, degree = 3, intercept = F), data = oecd )
+# Aquí podemos ver los knots
+attr(bs( oecd$debt.gdp.ratio, df = 10, degree = 3 ), "knots")
+# Vemos el resumen del modelo
+model_splines_5_df
+summary(model_splines_5_df)
+AIC(model_splines_5_df)
+BIC(model_splines_5_df)
+
+# Natural Spline con 8 grados de libertad
+
+model_splines_5_ns_df <- lm(share.of.debt ~ ns( debt.gdp.ratio, df = 8, intercept = F), data = oecd)
+# Aquí podemos ver los knots
+attr(ns( oecd$debt.gdp.ratio, df = 8, intercept = F), "knots")
+# Vemos el resumen del modelo
+model_splines_5_ns_df
+summary(model_splines_5_ns_df)
+AIC(model_splines_5_ns_df)
+BIC(model_splines_5_ns_df)
+
+# Natural Spline con 10 grados de libertad
+
+model_splines_5_ns_df_10 <- lm(share.of.debt ~ ns( debt.gdp.ratio, df = 10, intercept = F), data = oecd)
+# Aquí podemos ver los knots
+attr(ns( oecd$debt.gdp.ratio, df = 10, intercept = F), "knots")
+# Vemos el resumen del modelo
+model_splines_5_ns_df_10
+summary(model_splines_5_ns_df_10)
+AIC(model_splines_5_ns_df_10)
+BIC(model_splines_5_ns_df_10)
+
+```
+
+Como explicación de los grados de libertad, es importante conocer que las "cubic splines" son cúbicas entre cada par de puntos y fuera de los "puntos frontera".
+Su cáculo de grados de libertad es: **df - degree = knots**.
+En cambio, en las naturales, la función es lineal en ambos extremos.
+Sus grados de libertad siguen: **df - 1 = knots**.
+
+De esta manera, se puede afirmar que, ante dos splines (b-Spline cúbico y n-Spline) con los mismos grados de libertad, el spline natural tendrá 2 nodos más para modelar la función. De todas formas, se puede ver que con 10 grados de libertad el n-spline es peor que con 8 grados de libertad. Podemos observar esto con la función attr(), en la cual obtengo donde se han puesto los knots de los modelos.
+
+Siguiendo este hilo, es importante comentar como, tal como se ve en la función attr(), el modelo te distribuye uniformemente los knots. Esto, aunque pueda parecer en cierto modo contraintuitivo, suele ser una buena práctica.
+
+Creemos dummies para mejorar el modelo:
+
+```{r 5_creation_outlier}
+
+oecd['outlier_splines_1'] <- ifelse(cooks.distance(model_splines_5_df) > 1, "Sí", "No")
+
+model_splines_5_df_withdummies <- lm( share.of.debt ~ bs( debt.gdp.ratio, df = 10, degree = 3, intercept = F) + outlier_splines_1, data = oecd )
+# Aquí podemos ver los knots
+attr(bs( oecd$debt.gdp.ratio, df = 10, degree = 3 ), "knots")
+# Vemos el resumen del modelo
+model_splines_5_df_withdummies
+summary(model_splines_5_df_withdummies)
+AIC(model_splines_5_df_withdummies)
+BIC(model_splines_5_df_withdummies)
+
+
+```
+
+* Se puede observar que la adición de dummies ha mejorado bastante el R^2, donde **hemos pasado de 0.417 a 0.48**. Además, hemos pasado de una variable significativa a dos.
+* En adición, **el AIC se ha reducido ligeramente de 245 a 243**, lo cual es bueno.
+* El p-value es superior a 0.05, lo cual indica que **el modelo no es significativo, por lo que hay que desecharlo**.
+
+### Smooth Spline
+
+```{r 5_smooth_spline}
+
+# Ojo que en los smooth splines no es  y ~ x, es x, y 
+
+smooth5_nolog <- smooth.spline( oecd$debt.gdp.ratio, oecd$share.of.debt )
+smooth5_nolog
+summary(smooth5_nolog)
+
+```
+
+```{r 5_graphs_smooth}
+
+plot( oecd$debt.gdp.ratio,
+      oecd$share.of.debt,
+      main = "Smooth Splines Over Raw Data")
+lines( smooth5_nolog, col="red" )
+
+```
+
+Como se puede apreciar, por defecto la función smooth.spline te aporta un suavizado, que se puede ver fácilmente en la variable spar. Este valor suele estar entre 0 y 1, y en nuestro caso tiene valores negativos, lo que indica un fuerte sobreajuste que hace la función para intentar obtener un buen resultado. Esto debemos de rechazarlo, y por ello a continuación suavizaré las funciones:
+
+```{r 5_smooth_spline_smoothy}
+
+# Ojo que en los smooth splines no es  y ~ x, es x, y 
+
+smooth5_nolog_05 <- smooth.spline( oecd$debt.gdp.ratio, oecd$share.of.debt, spar = 1 )
+smooth5_nolog_05
+summary(smooth5_nolog_05)
+
+```
+
+```{r 5_graphs_smooth_smoothy}
+
+plot( oecd$debt.gdp.ratio,
+      oecd$share.of.debt,
+      main = "Smooth Splines Over Raw Data" )
+lines( smooth5_nolog_05, col="red" )
+
+```
+
+Como se puede apreciar, en el modelo, con un spar = 1, se consiguen unas líneas suaves que se ajustan medianamente bien a los datos. De esta forma, aunque spar = 1 pueda no ser el mejor parámetro, se está observando como era necesario añadir un suavizado ciertamente agresivo a la función sobre el valor por defecto que aporta el modelo.
+
+
+### Modelo GAM
+
+```{r 5_GAM}
+
+library(mgcv)
+
+gam5 <- mgcv::gam( log(oecd$share.of.debt) ~ s(log(oecd$debt.gdp.ratio) ), data = oecd)
+summary(gam5)
+plot(gam5)
+
+gam5_nolog <- mgcv::gam( oecd$share.of.debt ~ s( oecd$debt.gdp.ratio ), data = oecd, family = gaussian(link = "log"))
+summary(gam5_nolog)
+plot(gam5_nolog)
+
+```
+
+* Como se puede observar, **con el link = log el modelo mejora increíblemente**, mucho más que pasándole datos logaritmizados. Posee una explicación de la devianza muy alta y un R^2 ajustado también muy alto. Además hay dos variables significativas.
+
+Vamos a probar otra dummyficación distinta y más sofisticada...
+
+```{r 5_dummyfication_GAM_2}
+
+library(arules)
+dummiesGDP <- dummies::dummy( discretize(oecd$gdp, 
+                                        method = "frequency") )
+
+nuevodset <- cbind(oecd, dummiesGDP)
+
+gam5_withdummies2 <- mgcv::gam( oecd$share.of.debt ~ s(oecd$debt.gdp.ratio) + dummiesGDP, data = nuevodset, family = gaussian(link = "log"))
+summary(gam5_withdummies2)
+plot(gam5_withdummies2)
+
+```
+
+* Se puede apreciar como pasamos de **0.943 a 0.994 en R^2**, y se marca como variable significativa la frecuencia alta de GDP, por lo que parece ser que hemos caído en overfitting.
+
+
+### Conclusiones
+
+* En este caso, **el mejor modelo que habíamos probado hasta ahora en el examen** es el modelo lineal con logaritmos, puesto que suavizamos los outliers, cumple normalidad y heterocedasticidad, sus variables son significativas y tiene un R^2 alto respecto al resto de modelos probados.
+
+* **De dentro de este ejercicio**, me quedo con el modelo gam5_nolog, ya que posee la mejor explicación y R^2. El uso de link = log ha mejorado el modelo increíblemente, y el R^2 de 0.943 y 95% de explicación de la devianza lo convierten en un modelo excelente, que parece no haber caído en overfitting y que tiene varias variables explicativas.
+
+***
+
+## Ejercicio 6
+
+Los datos contenidos en el fichero avena.csv corresponden a las cosechas de tres variedades de avena (expresadas como 1/4 lb por sub-plot, cada uno de 1/80 acre). Hay seis bloques (I-VI) y cuatro tratamientos de fertilización con nitrógeno. [Fuente: Venables y Ripley (2002), pág. 282.]
+
+* Establezca el diseño asociado a este experimento y estime los distintos efectos a través del correspondiente modelo lineal.
+
+### Importar datos
+
+```{r 6_import_dataset}
+
+avena <- read.csv('../Data/avena.csv', sep=';', header = T)
+str(avena)
+
+```
+
+### Exploratorio de los datos
+
+Vamos a realizar un exploratorio de los datos para que podamos ver como se distribuye la única variable numérica (yield), respecto a las factors:
+
+
+```{r 6_exploratory_variety}
+
+aggregate( avena$yield, by=list(avena$variety), FUN=mean )
+boxplot( yield ~ variety, data = avena, col = "light blue" )
+
+```
+
+Observables los rangos intercuartílicos, las medianas y los bigotes.
+
+* Destaca la **menor variabilidad de Marvellous que en el resto**.
+
+```{r 6_exploratory_nitro}
+
+aggregate( avena$yield, by=list(avena$nitro), FUN=mean )
+boxplot( yield ~ nitro, data = avena, col = "red" )
+
+```
+
+* En esta gráfica, destaca enormente **el aumento de la mediana a mayor nitro**. Además **las variabilidades se mantienen bastante constantes**.
+
+```{r 6_exploratory_block}
+
+aggregate( avena$yield, by=list(avena$block), FUN=mean )
+boxplot( yield ~ block, data = avena, col = "pink" )
+
+```
+
+* Sin conocer en detalle los bloques, destaca **la variabilidad que existen entre algunos de ellos tanto en IQR como en mediana**.
+
+### Desarrollo de modelo lineal
+
+```{r 6_model_lm}
+
+modelo6_0 <- lm(yield ~ variety * nitro, data = avena)
+anova(modelo6_0)
+plot(modelo6_0)
+
+```
+
+### Desarrollo modelo ANOVA
+
+```{r 6_model_dev_1}
+
+model6_1 <- aov(yield ~ variety * nitro + Error(block:variety), data = avena)
+summary(model6_1)
+
+```
+
+* Según este modelo ANOVA, Nitro es la única variable significativa. Pero no debemos usar el error, ya que lo que queremos es ver si las suposiciones que nos hacemos son correctas, por lo que lo voy a eliminar a ver qué obtenemos...
+
+```{r 6_model_dev_2}
+
+model6_2 <- aov(yield ~ variety * nitro + block:variety, data = avena)
+summary(model6_2)
+
+```
+
+* Según este modelo ANOVA, **la interacción de la variedad con el bloque** tiene un gran poder de significación, al igual que **nitro**. **Variety** tiene una significación también aceptable para estar dentro del 95%.
+* En cambio, variety:nitro no tiene nada de poder de significación.
+* Esto significa que **las medias entre todos los grupos menos entre variety:nitro son significativamente iguales**.
+
+Vamos a analizar las gráficas de este modelo ANOVA para comprobar si vamos por el buen camino...
+
+### Interpretación de gráficas del modelo ANOVA
+
+```{r 6_model_graphs_2}
+
+plot(model6_2)
+
+```
+
+* En "Residuals Vs Fitted", podemos comprobar que existe **homocedasticidad en los residuos**.
+* En el "Q-Q Plot", podemos ver como **es necesario un estudio de normalidad**.
+* En el "Constant Leverage", podemos observar como **el apalancamiento es constante entre todas las variedades**.
+
+
+### Desarrollo del modelo split-plot
+
+```{r 6_model_splitplot}
+
+library(lme4)
+model6_3 <- lmer( yield ~ 1 + nitro*variety + (1|variety:block), data = avena)
+model6_3
+summary(model6_3)
+
+```
+
+### Visualizaciones modelo split-plot
+
+```{r 6_model_splitplot_graph}
+
+plot(model6_3)
+
+```
+
+* Es muy constante a lo largo de todos los fitted values.
+
+### Conclusiones del ejercicio
+
+En el random effects, podemos ver como la varianza toma dos valores:
+
+* Variety:Block    -> 321
+* Residual = Error -> 177
+
+Pasándolo a porcentajes, sería...
+
+* variety:Block    -> 64.4%
+* Residual = Error -> 35.6%
+
+* De esta manera, **la varianza no explicada del modelo que se debe a variety:block es del 64.4%**. Probablemente aumentando el número de bloques se reduzca el error experimental.
+
+Así, la interacción entre variedad y nitro no es significativa. Esto lastra el modelo, por lo que debería de ser eliminada del mismo.
+
+***
+
+## Ejercicio 7
+
+El data frame UCBAdmissions del paquete datasets contiene datos agregados sobre los solicitantes a la escuela de posgrado en Berkeley para los seis departamentos más grandes en 1973 clasificados por admisión y sexo.
+
+* El objetivo del estudio es determinar si existe discriminación contra las mujeres en este tipo de ámbitos, y, por tanto, interesa conocer el efecto de la variable Gender en la probabilidad de resultar admitido. Estime, para ello, un modelo de regresión logística. 
+* Nota: especificar la frecuencia a través del parámetro weights
+
+### Importación de datos
+
+```{r 7_import_data}
+
+library(datasets)
+ucb <- UCBAdmissions
+
+# Como lo importa como table, lo pasamos a df
+
+ucb <- data.frame(ucb)
+
+```
+
+### Creación del modelo
+
+Como nos pide el ejercicio que veamos a ver si la variable Gender influye en la probabilidad de ser admitido, vamos a hacer un modelo de regresión logística para comprobarlo.
+
+```{r 7_levels_ucb}
+
+levels(ucb$Admit)
+
+```
+
+```{r 7_relevel_woman}
+
+ucb$Gender <- relevel(ucb$Gender, ref = "Male")
+
+```
+
+```{r 7_model}
+
+ucb_model1 <- glm(Admit ~ Gender, data = ucb, family = binomial, weights = Freq)
+summary(ucb_model1)
+
+```
+
+A continuación, se calcula el porcentaje de mujeres rechazadas a través del logit:
+
+```{r 7_rejected}
+
+Mujer <- 1 # Hacemos mujeres como X
+
+logit <- ucb_model1$coefficients[1] + ucb_model1$coefficients[2] * Mujer
+P.class <- exp(logit) / (1 + exp(logit))
+print(paste0('Probabilidad de ser rechazada en caso de ser mujer: ', P.class*100, '%'))
+
+Mujer <- 0 # Hacemos hombres como X
+
+logit <- ucb_model1$coefficients[1] + ucb_model1$coefficients[2] * Mujer
+P.class <- exp(logit) / (1 + exp(logit))
+print(paste0('Probabilidad de ser rechazado en caso de ser hombre: ', P.class*100, '%'))
+
+```
+
+
+```{r 7_model_2}
+
+ucb_model2 <- glm(Admit ~ Gender + Dept, data = ucb, family = "binomial", weights = Freq)
+summary(ucb_model2)
+
+```
+
+### Conclusiones
+
+Al principio se utiliza un modelo simple ya que, en el enunciado, se pide simplemente observar la admisión en comparación con el sexo.
+
+Como se puede apreciar en los porcentajes finales:
+
+* La probabilidad de ser rechazada en caso de ser mujer es del 69.64%
+* La probabilidad de ser rechazado en caso de ser hombre es del 55.48%
+
+Pero esto es llegar a la **paradoja de Yule-Simpson**, porque al añadir la variable de departamento el AIC baja y además los valores significativos cambian, donde el género femenino ahora no tiene importancia, mientras que el departamento en el que se quiere entrar sí.
+
+Así, se puede concluir que **no se puede determinar que en dicha universidad, en 1973, fueran sexistas** en la selección de alumnos.
+
